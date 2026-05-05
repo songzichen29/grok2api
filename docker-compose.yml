@@ -16,19 +16,20 @@ services:
       ACCOUNT_REDIS_URL: ${ACCOUNT_REDIS_URL:-}
       ACCOUNT_MYSQL_URL: ${ACCOUNT_MYSQL_URL:-}
       ACCOUNT_POSTGRESQL_URL: ${ACCOUNT_POSTGRESQL_URL:-}
-      # 启用 CF 自动刷新: 取消以下三行注释，并取消底部 flaresolverr 服务的注释
-      # FLARESOLVERR_URL: http://flaresolverr:8191
-      # CF_REFRESH_INTERVAL: "600"
-      # CF_TIMEOUT: "60"
 
       # ACCOUNT_STORAGE: local | redis | mysql | postgresql
       # ACCOUNT_LOCAL_PATH: SQLite path when ACCOUNT_STORAGE=local
       # ACCOUNT_REDIS_URL: Redis DSN when ACCOUNT_STORAGE=redis
       # ACCOUNT_MYSQL_URL: MySQL DSN when ACCOUNT_STORAGE=mysql
       # ACCOUNT_POSTGRESQL_URL: PostgreSQL DSN when ACCOUNT_STORAGE=postgresql
+    # 让容器能通过 host.docker.internal 访问宿主机上的代理 (mihomo / clash 等)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+    depends_on:
+      - flaresolverr
     restart: unless-stopped
 
   # 如果出口 IP 不干净，可取消以下注释使用 Warp 作为落地代理
@@ -44,13 +45,13 @@ services:
   #   cap_add:
   #     - NET_ADMIN
 
-  # 启用 CF 自动刷新时取消以下注释
-  # flaresolverr:
-  #   container_name: flaresolverr
-  #   image: ghcr.io/flaresolverr/flaresolverr:latest
-  #   ports:
-  #     - "127.0.0.1:8191:8191"
-  #   environment:
-  #     TZ: Asia/Shanghai
-  #     LOG_LEVEL: info
-  #   restart: unless-stopped
+  # CF 自动刷新: 与 grok2api 同 compose 网络, 容器内通过 http://flaresolverr:8191 访问
+  flaresolverr:
+    container_name: flaresolverr
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    ports:
+      - "127.0.0.1:8191:8191"
+    environment:
+      TZ: Asia/Shanghai
+      LOG_LEVEL: info
+    restart: unless-stopped

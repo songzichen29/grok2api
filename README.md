@@ -97,8 +97,8 @@ flowchart LR
 git clone https://github.com/chenyme/grok2api
 cd grok2api
 cp .env.example .env
-uv sync
-uv run granian --interface asgi --host 0.0.0.0 --port 8000 --workers 1 app.main:app
+conda activate grok2api
+granian --interface asgi --host 0.0.0.0 --port 8000 --workers 1 app.main:app
 ```
 
 ### Docker Compose
