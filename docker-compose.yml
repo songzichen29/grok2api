@@ -1,9 +1,10 @@
 services:
   grok2api:
     container_name: grok2api
-    image: ghcr.io/chenyme/grok2api:latest
+    image: ghcr.io/songzichen29/grok2api:custom
     ports:
-      - "${HOST_PORT:-8000}:${SERVER_PORT:-8000}"
+      # HOST_BIND 默认 0.0.0.0 直接对外；放反代后面时设为 127.0.0.1，并通过 HOST_PORT 换内部端口
+      - "${HOST_BIND:-0.0.0.0}:${HOST_PORT:-8000}:${SERVER_PORT:-8000}"
     environment:
       TZ: Asia/Shanghai
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
