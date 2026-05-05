@@ -8,11 +8,24 @@ responses.py — only the input/output format conversion differs.
 """
 
 import asyncio
+import base64
+import hashlib
 import os
 import time
 from typing import Any, AsyncGenerator
 
 import orjson
+
+
+def _make_thinking_signature(msg_id: str, content: str) -> str:
+    """生成 thinking block 的伪 signature。
+
+    Anthropic Extended Thinking 协议要求 thinking block 携带 signature；
+    Claude Code 等严格客户端没有 signature 时会丢弃 thinking 块不渲染。
+    这里基于 msg_id+内容做稳定哈希，base64 编码作为占位 signature。
+    """
+    raw = hashlib.sha256(f"{msg_id}|{content}".encode("utf-8")).digest()
+    return base64.b64encode(raw).decode("ascii")
 
 from app.platform.logging.logger import logger
 from app.platform.config.snapshot import get_config
@@ -401,6 +414,14 @@ async def create(
                                 # Close thinking block if open
                                 if think_started and not think_closed:
                                     think_closed = True
+                                    yield _sse("content_block_delta", {
+                                        "type":  "content_block_delta",
+                                        "index": block_index,
+                                        "delta": {
+                                            "type":      "signature_delta",
+                                            "signature": _make_thinking_signature(msg_id, "".join(think_buf)),
+                                        },
+                                    })
                                     yield _sse("content_block_stop", {
                                         "type":  "content_block_stop",
                                         "index": block_index,
@@ -550,6 +571,14 @@ async def create(
 
                         # Close open blocks
                         if think_started and not think_closed:
+                            yield _sse("content_block_delta", {
+                                "type":  "content_block_delta",
+                                "index": block_index,
+                                "delta": {
+                                    "type":      "signature_delta",
+                                    "signature": _make_thinking_signature(msg_id, "".join(think_buf)),
+                                },
+                            })
                             yield _sse("content_block_stop", {
                                 "type":  "content_block_stop",
                                 "index": block_index,
@@ -749,10 +778,18 @@ async def create(
         model, len(full_text), len(full_think), len(adapter.image_urls),
     )
 
-    content = [{"type": "text", "text": full_text}]
+    content = []
+    if full_think:
+        content.append({
+            "type":      "thinking",
+            "thinking":  full_think,
+            "signature": _make_thinking_signature(msg_id, full_think),
+        })
+    text_block = {"type": "text", "text": full_text}
     anns = adapter.annotations_list()
     if anns:
-        content[0]["annotations"] = anns
+        text_block["annotations"] = anns
+    content.append(text_block)
     resp = _build_message_response(msg_id, model, content, "end_turn", in_tokens, out_tokens)
     sources = adapter.search_sources_list()
     if sources:
