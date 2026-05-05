@@ -1,4 +1,16 @@
 services:
+  mihomo:
+    container_name: grok2api-mihomo
+    image: docker.m.daocloud.io/library/alpine:3.21
+    command: ["/usr/local/bin/mihomo", "-d", "/config"]
+    ports:
+      - "127.0.0.1:17891:7890"
+      - "127.0.0.1:19091:9090"
+    volumes:
+      - /usr/local/bin/mihomo:/usr/local/bin/mihomo:ro
+      - ./data/mihomo:/config
+    restart: unless-stopped
+
   grok2api:
     container_name: grok2api
     image: ghcr.io/songzichen29/grok2api:custom
@@ -22,28 +34,34 @@ services:
       # ACCOUNT_REDIS_URL: Redis DSN when ACCOUNT_STORAGE=redis
       # ACCOUNT_MYSQL_URL: MySQL DSN when ACCOUNT_STORAGE=mysql
       # ACCOUNT_POSTGRESQL_URL: PostgreSQL DSN when ACCOUNT_STORAGE=postgresql
-    # 让容器能通过 host.docker.internal 访问宿主机上的代理 (mihomo / clash 等)
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
     depends_on:
+      - mihomo
       - flaresolverr
     restart: unless-stopped
 
-  # 如果出口 IP 不干净，可取消以下注释使用 Warp 作为落地代理
-  # 启用后将 proxy.base_proxy_url 设为 socks5://warp:1080
+  # Warp 落地代理 (源作者推荐, 但 caomingjun/warp 的 cloudflare-warp daemon 在部分宿主会 hung)
+  # 启用前先确认宿主能跑: 单独 docker run --privileged 启动一次看 daemon 是否能 ready
+  # 启用后 config.toml proxy.egress.proxy_url 设为 socks5://warp:1080
   # warp:
   #   container_name: warp
-  #   image: caomingjun/warp:latest
-  #   restart: unless-stopped
-  #   ports:
-  #     - "127.0.0.1:1080:1080"
+  #   image: caomingjun/warp
+  #   restart: always
+  #   device_cgroup_rules:
+  #     - 'c 10:200 rwm'
   #   environment:
   #     - WARP_SLEEP=2
   #   cap_add:
+  #     - MKNOD
+  #     - AUDIT_WRITE
   #     - NET_ADMIN
+  #   sysctls:
+  #     - net.ipv6.conf.all.disable_ipv6=0
+  #     - net.ipv4.conf.all.src_valid_mark=1
+  #   volumes:
+  #     - ./data/warp:/var/lib/cloudflare-warp
 
   # CF 自动刷新: 与 grok2api 同 compose 网络, 容器内通过 http://flaresolverr:8191 访问
   flaresolverr:
@@ -54,4 +72,18 @@ services:
     environment:
       TZ: Asia/Shanghai
       LOG_LEVEL: info
+    # 内部 Chrome 走 host 上的 mihomo 代理时也需要解析 host.docker.internal
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      - mihomo
     restart: unless-stopped
+
+# 固定 grok2api 专用桥接子网, 避免每次 compose up 抓取新段后被宿主机 iptables 拒绝出网代理
+networks:
+  default:
+    name: grok2api_default
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
+          gateway: 172.30.0.1
