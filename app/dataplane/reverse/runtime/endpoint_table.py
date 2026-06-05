@@ -42,6 +42,11 @@ WS_LIVEKIT        = "wss://livekit.grok.com"
 # ── LiveKit ─────────────────────────────────────────────────────────────
 LIVEKIT_TOKENS    = f"{BASE}/rest/livekit/tokens"              # POST
 
+# ── Console (console.x.ai) ─────────────────────────────────────────────
+CONSOLE_BASE       = "https://console.x.ai"
+CONSOLE_RESPONSES  = f"{CONSOLE_BASE}/v1/responses"              # POST (OpenAI Responses API)
+CONSOLE_CHAT       = f"{CONSOLE_BASE}/v1/chat/completions"       # POST (future use)
+
 
 __all__ = [
     "BASE", "ASSETS_CDN",
@@ -51,4 +56,5 @@ __all__ = [
     "ACCEPT_TOS", "NSFW_MGMT", "SET_BIRTH",
     "MEDIA_POST", "MEDIA_POST_LINK", "VIDEO_UPSCALE",
     "WS_IMAGINE", "WS_LIVEKIT", "LIVEKIT_TOKENS",
+    "CONSOLE_BASE", "CONSOLE_RESPONSES", "CONSOLE_CHAT",
 ]

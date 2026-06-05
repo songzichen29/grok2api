@@ -215,12 +215,26 @@ def is_invalid_credentials_body(body: str) -> bool:
 
 
 def is_invalid_credentials_error(exc: BaseException) -> bool:
-    """Return whether *exc* indicates the account is invalid or blocked."""
+    """Return whether *exc* indicates the account is invalid or blocked.
+
+    Accepts both clean Grok error bodies (e.g. ``blocked-user``) and
+    Cloudflare-intercepted 403 responses where the real body is obscured
+    (empty, ``-``, or HTML).  For the latter case we treat any 403 from
+    the rate-limits endpoint as invalid credentials, because a valid
+    account should never receive 403 from that endpoint.
+    """
     if not isinstance(exc, UpstreamError):
         return False
     if exc.status not in (400, 401, 403):
         return False
-    return is_invalid_credentials_body(str(exc.details.get("body", "") or ""))
+    body = str(exc.details.get("body", "") or "")
+    if is_invalid_credentials_body(body):
+        return True
+    # 403 但 body 被Cloudflare吞掉（空、"-"、或HTML），视为凭证失效
+    # 因为 rate-limits API 对有效账号不会返回 403
+    if exc.status == 403 and not body.startswith("{"):
+        return True
+    return False
 
 
 def _proxy_feedback_kind_for_error(
